@@ -1,58 +1,111 @@
 # Orchestrated Scalable Streaming Pipeline
 
-**`docker-compose.yml`**: Defines and manages all the services required for the pipeline using Docker.   
-**`airflow/`**: Contains files related to the Airflow orchestration:   
-    * **`Dockerfile`**: Dockerfile for building the Airflow webserver and scheduler image.   
-    * **`requirements.txt`**: Lists Python dependencies for the Airflow environment.   
-    * **`dags/`**: Directory containing the Airflow DAG definition (`produce_topic_dag.py`).   
-**`spark/`**: Contains the Spark Structured Streaming application:   
-    * **`spark_streaming.py`**: The Python script for the Spark streaming job.   
+Production-grade real-time data pipeline: **Airflow-orchestrated** Kafka ingestion → **Spark Structured Streaming** processing → **Cassandra** persistence, fully containerized with Docker Compose.
 
-## Prerequisites
+---
 
-* **Docker** ([https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)) and **Docker Compose** ([https://docs.docker.com/compose/install/](https://docs.docker.com/compose/install/)) installed on your system.
+## 🎯 What This Solves
 
-## Getting Started
+Building real-time data infrastructure requires orchestration, fault tolerance, and scalability at every layer. This project demonstrates how to wire together industry-standard components into a working end-to-end streaming system — the same architecture used in production at data-intensive companies.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/Ajay-Deshpande/Orchestrated-Scalable-Streaming-Pipeline](https://github.com/Ajay-Deshpande/Orchestrated-Scalable-Streaming-Pipeline)
-    cd ajay-deshpande-orchestrated-scalable-streaming-pipeline
-    ```
+---
 
-2.  **Start the services using Docker Compose:**
-    ```bash
-    docker-compose up -d
-    ```
-    This command will build and start all the necessary services defined in the `docker-compose.yml` file, including ZooKeeper, Kafka brokers, Kafka Connect, Schema Registry, Kafka UI, Airflow (webserver, scheduler, and database), Spark master, and Cassandra.
+## 🏗 Architecture
 
-3.  **Access the UIs:**
-    * **Airflow UI:** Navigate to `http://localhost:8080` in your web browser. You might need to wait a few minutes for the webserver to start. Log in with the default credentials (username: `admin`, password: `admin`).
-    * **Kafka UI:** Navigate to `http://localhost:8888`.
-    * **Spark UI:** Navigate to `http://localhost:8085`.
-    * **Cassandra:** You can interact with Cassandra using a client tool like `cqlsh` connected to `localhost:9042` with username `cassandra` and password `cassandra`.
+```
+┌─────────────────────────────────────────────────┐
+│                  Airflow (Orchestration)          │
+│  DAG: random_people_names (daily @ 01:00 UTC)    │
+│  → Fetches data from randomuser.me API           │
+│  → Publishes JSON to Kafka topic                 │
+└───────────────────┬─────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────┐
+│           Kafka Cluster (3 brokers)              │
+│  Topic: random_names                             │
+│  Schema Registry + Kafka UI                      │
+└───────────────────┬─────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────┐
+│        Spark Structured Streaming                │
+│  Reads from Kafka topic in real time             │
+│  Parses and transforms JSON → structured schema  │
+└───────────────────┬─────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────┐
+│              Cassandra (Storage)                 │
+│  Table: spark_streaming.random_names             │
+│  Append-only, low-latency writes                 │
+└─────────────────────────────────────────────────┘
+```
 
-## Pipeline Workflow
+---
 
-1.  **Airflow DAG Execution:** The `random_people_names` DAG in Airflow is scheduled to run daily at 01:00 UTC. It consists of a `PythonOperator` that executes the `start_streaming` function.
-2.  **Data Fetching and Publishing:** The `start_streaming` function fetches random user data from the `https://randomuser.me/api/?results=1` endpoint. It then formats this data into a JSON and publishes it to the `random_names` Kafka topic. This process runs continuously for 2 minutes each time the DAG is executed.
-3.  **Real-time Data Consumption and Processing:** The Spark Structured Streaming application continuously listens to the `random_names` Kafka topic.
-4.  **Data Transformation:** The Spark application parses the JSON data received from Kafka and transforms it into a structured format based on the defined schema.
-5.  **Data Persistence:** The processed data is then written in real-time to the `random_names` table within the `spark_streaming` keyspace in the Cassandra database.
+## ⚙️ Components
 
-## Configuration
+| Component | Role |
+|---|---|
+| **Airflow** | Orchestrates the pipeline; schedules data ingestion DAG |
+| **Kafka (3-broker cluster)** | Distributed message queue; buffers data between producer and consumer |
+| **Schema Registry** | Enforces message schema consistency across producers/consumers |
+| **Spark Structured Streaming** | Real-time stream processing with exactly-once semantics |
+| **Cassandra** | Highly available, write-optimized NoSQL storage |
+| **Docker Compose** | Single-command environment setup for all services |
 
-* **Kafka:** The Kafka cluster consists of three brokers (`kafka1`, `kafka2`, `kafka3`). The advertised listeners are configured for both internal and external access.
-* **Airflow:** The Airflow environment is configured to use a PostgreSQL database and the Local executor. DAGs are mounted from the `./airflow/dags` directory.
-* **Spark:** The Spark master is configured to connect to the Kafka brokers and the Cassandra instance. The necessary Kafka and Cassandra connector JARs are included in the Spark session configuration.
-* **Cassandra:** A single Cassandra instance is used for storing the processed data.
-* **Kafka UI:** Configured to connect to the Kafka cluster and the Schema Registry.
+---
 
-## Further Development
+## 🚀 Getting Started
 
-* **Error Handling:** Implement more robust error handling mechanisms in the Airflow DAG and the Spark streaming application.
-* **Data Transformation Logic:** Extend the Spark streaming application to perform more complex data transformations and enrichments.
-* **Scalability Enhancements:** Explore options for scaling the Spark streaming application and the Cassandra cluster for higher data volumes.
-* **Monitoring and Alerting:** Integrate monitoring tools and alerting mechanisms for the entire pipeline.
-* **Testing:** Add unit and integration tests for the different components of the pipeline.
-* **More Sophisticated Data Generation:** Implement more realistic and varied data generation.
+### Prerequisites
+- Docker & Docker Compose installed
+
+### Start All Services
+```bash
+git clone https://github.com/Ajay-Deshpande/Orchestrated-Scalable-Streaming-Pipeline
+cd Orchestrated-Scalable-Streaming-Pipeline
+docker-compose up -d
+```
+
+### Access UIs
+
+| Service | URL | Credentials |
+|---|---|---|
+| Airflow | http://localhost:8080 | admin / admin |
+| Kafka UI | http://localhost:8888 | — |
+| Spark UI | http://localhost:8085 | — |
+| Cassandra | localhost:9042 | cassandra / cassandra |
+
+---
+
+## 📁 Structure
+
+```
+├── docker-compose.yml                  # All services definition
+├── airflow/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── dags/
+│       └── produce_topic_dag.py        # Airflow DAG
+└── spark/
+    └── spark_streaming.py              # Spark Structured Streaming job
+```
+
+---
+
+## 🛠 Stack
+
+**Orchestration:** Apache Airflow  
+**Messaging:** Apache Kafka, Confluent Schema Registry  
+**Processing:** Apache Spark (Structured Streaming)  
+**Storage:** Apache Cassandra  
+**Infrastructure:** Docker, Docker Compose  
+**Language:** Python
+
+---
+
+## 📌 Related Projects
+
+- [RealTime-Spark-Streaming](https://github.com/Ajay-Deshpande/RealTime-Spark-Streaming) — Spark streaming fundamentals
